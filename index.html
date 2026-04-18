@@ -1,0 +1,2047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="AcouScan — acoustic cardiac screening via USB-C earbud stethoscope. Research/demo only.">
+<meta name="theme-color" content="#070c10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#00c8a0">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AcouScan">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="AcouScan">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<title>AcouScan™ — CardioSense AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:       #070c10;
+    --bg2:      #0d1519;
+    --bg3:      #111c22;
+    --card:     #0f1e27;
+    --border:   rgba(0,200,160,0.13);
+    --accent:   #00c8a0;
+    --accent2:  #00e5b8;
+    --warn:     #ff6b4a;
+    --muted:    #4a7a70;
+    --text:     #d4ede8;
+    --textdim:  #6a9e94;
+    --red:      #ff4a4a;
+    --amber:    #ffb84a;
+    --green:    #4affb8;
+    --glow:     0 0 32px rgba(0,200,160,0.18);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,200,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,160,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: -40%;
+    left: -20%;
+    width: 80%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(0,180,140,0.06) 0%, transparent 65%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 48px 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .brand {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+    opacity: 0.7;
+  }
+
+  .title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 38px;
+    font-weight: 400;
+    line-height: 1.05;
+    color: #fff;
+    letter-spacing: -0.01em;
+  }
+
+  .title em {
+    font-style: italic;
+    color: var(--accent2);
+  }
+
+  .subtitle {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--textdim);
+    letter-spacing: 0.04em;
+    line-height: 1.6;
+  }
+
+  /* ── WAVEFORM CANVAS ── */
+  .wave-wrap {
+    position: relative;
+    margin: 20px 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    height: 140px;
+  }
+
+  .wave-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 40%, rgba(0,200,160,0.04) 100%);
+    pointer-events: none;
+  }
+
+  canvas#waveform {
+    display: block;
+    width: 100%;
+    height: 140px;
+  }
+
+  .wave-label {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .wave-status {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .dot.live { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  .dot.analyzing { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: pulse 0.7s ease-in-out infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  /* ── METRICS ROW ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .metric {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color 0.3s;
+  }
+
+  .metric.active { border-color: rgba(0,200,160,0.35); box-shadow: var(--glow); }
+
+  .metric-label {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--textdim);
+  }
+
+  .metric-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .metric-value.warn { color: var(--warn); }
+  .metric-value.ok   { color: var(--green); }
+  .metric-value.dim  { color: var(--textdim); opacity: 0.5; }
+
+  .metric-unit {
+    font-size: 9px;
+    color: var(--textdim);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── DURATION + QUALITY ── */
+  .row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .mini-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
+  .mini-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--textdim); margin-bottom: 6px; }
+
+  .quality-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .quality-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.5s ease, background 0.3s;
+  }
+
+  .quality-text { font-size: 13px; color: var(--text); font-family: 'DM Mono', monospace; }
+
+  /* ── CONTROLS ── */
+  .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+
+  .btn {
+    flex: 1;
+    height: 52px;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #070c10;
+  }
+
+  .btn-primary:active { transform: scale(0.97); background: var(--accent2); }
+
+  .btn-primary.recording {
+    background: var(--warn);
+    color: #fff;
+    animation: recpulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes recpulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,107,74,0.4)} 50%{box-shadow:0 0 0 10px rgba(255,107,74,0)} }
+
+  .btn-secondary {
+    background: var(--bg3);
+    color: var(--textdim);
+    border: 1px solid var(--border);
+    flex: 0 0 52px;
+  }
+
+  .btn-secondary:active { transform: scale(0.97); }
+  .btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── DURATION TIMER ── */
+  .timer { font-size: 20px; color: var(--text); font-family: 'DM Serif Display', serif; }
+
+  /* ── AI RESULT PANEL ── */
+  .result-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    transition: border-color 0.4s;
+  }
+
+  .result-panel.has-result { border-color: rgba(0,200,160,0.3); }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .result-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .result-badge {
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: rgba(0,200,160,0.12);
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  .result-badge.warn { background: rgba(255,107,74,0.12); color: var(--warn); }
+  .result-badge.amber { background: rgba(255,184,74,0.12); color: var(--amber); }
+
+  .result-body {
+    padding: 16px;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: var(--text);
+    min-height: 80px;
+    white-space: pre-wrap;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .result-body.empty { color: var(--textdim); font-style: italic; }
+
+  /* ── THINKING ANIMATION ── */
+  .thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .thinking span {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  .thinking span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+  /* ── DISCLAIMER ── */
+  .disclaimer {
+    background: rgba(255,107,74,0.06);
+    border: 1px solid rgba(255,107,74,0.15);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 11px;
+    color: rgba(255,107,74,0.7);
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── API KEY INPUT ── */
+  .api-section {
+    margin-bottom: 16px;
+  }
+
+  .api-label {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--textdim);
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .api-input {
+    width: 100%;
+    height: 44px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0 14px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+
+  .api-input:focus { border-color: rgba(0,200,160,0.4); }
+  .api-input::placeholder { color: var(--textdim); opacity: 0.5; }
+
+  /* ── PEAKS TRACE ── */
+  .peak-markers { position: absolute; bottom: 0; left: 0; right: 0; height: 100%; pointer-events: none; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 0; }
+
+  /* iPhone safe area */
+  .app { padding-bottom: max(40px, env(safe-area-inset-bottom)); }
+
+  /* ── EXPORT ROW ── */
+  .export-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .btn-export {
+    height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg3);
+    color: var(--textdim);
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+  }
+
+  .btn-export:hover { border-color: rgba(0,200,160,0.3); color: var(--accent); }
+  .btn-export:active { transform: scale(0.97); }
+  .btn-export:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-export.rec-active {
+    border-color: rgba(255,107,74,0.5);
+    color: var(--warn);
+    animation: recpulse 1.5s ease-in-out infinite;
+  }
+
+  .btn-export svg { flex-shrink: 0; }
+
+  /* ── SCREEN RECORD BANNER ── */
+  .rec-banner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,107,74,0.08);
+    border: 1px solid rgba(255,107,74,0.2);
+    border-radius: 8px;
+    padding: 9px 14px;
+    margin-bottom: 14px;
+    font-size: 11px;
+    color: var(--warn);
+    letter-spacing: 0.04em;
+  }
+  .rec-banner.visible { display: flex; }
+  .rec-dot { width:7px; height:7px; border-radius:50%; background:var(--warn); animation: pulse 1s infinite; flex-shrink:0; }
+
+  /* ── EXPORT ROW ── */
+  .export-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .btn-export {
+    height:44px; border:1px solid var(--border); border-radius:10px;
+    background:var(--bg3); color:var(--textdim);
+    font-family:'Syne',sans-serif; font-weight:600; font-size:11px;
+    letter-spacing:0.1em; text-transform:uppercase; cursor:pointer;
+    transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:7px;
+  }
+  .btn-export:hover { border-color:rgba(0,200,160,0.3); color:var(--accent); }
+  .btn-export:active { transform:scale(0.97); }
+  .btn-export:disabled { opacity:0.3; cursor:not-allowed; }
+  .btn-export.rec-active { border-color:rgba(255,107,74,0.5); color:var(--warn); animation:recpulse 1.5s ease-in-out infinite; }
+  .rec-banner { display:none; align-items:center; gap:8px; background:rgba(255,107,74,0.08); border:1px solid rgba(255,107,74,0.2); border-radius:8px; padding:9px 14px; margin-bottom:14px; font-size:11px; color:var(--warn); letter-spacing:0.04em; }
+  .rec-banner.visible { display:flex; }
+  .rec-dot { width:7px; height:7px; border-radius:50%; background:var(--warn); animation:pulse 1s infinite; flex-shrink:0; }
+
+  /* ── AUDIO INPUT PANEL ── */
+  .audio-panel {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 18px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .audio-panel .ap-title {
+    font-family:'Syne',sans-serif; font-weight:800; font-size:10px;
+    letter-spacing:0.18em; text-transform:uppercase; color:var(--accent);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .audio-panel .ap-hint {
+    font-size: 10px; color: var(--textdim); line-height: 1.5; opacity: 0.8;
+  }
+  .audio-row { display:flex; flex-direction:column; gap:6px; }
+  .audio-row label {
+    font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--textdim);
+  }
+  .device-select {
+    width:100%; background:var(--bg2); color:var(--text);
+    border:1px solid var(--border); border-radius:8px;
+    padding:10px 12px; font-family:'DM Mono',monospace; font-size:12px;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%2300c8a0' stroke-width='1.5'><polyline points='3,4.5 6,7.5 9,4.5'/></svg>");
+    background-repeat:no-repeat; background-position:right 12px center;
+    padding-right:34px;
+  }
+  .device-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,200,160,0.1); }
+  .device-select:disabled { opacity:0.5; cursor:not-allowed; }
+
+  .monitor-row {
+    display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
+  }
+  .toggle-wrap { display:flex; align-items:center; gap:10px; }
+  .toggle {
+    position:relative; width:40px; height:22px; background:var(--bg2);
+    border:1px solid var(--border); border-radius:11px; cursor:pointer;
+    transition:all 0.2s; flex-shrink:0;
+  }
+  .toggle::after {
+    content:''; position:absolute; top:2px; left:2px;
+    width:16px; height:16px; border-radius:50%;
+    background:var(--textdim); transition:all 0.2s;
+  }
+  .toggle.on { background:rgba(0,200,160,0.2); border-color:var(--accent); }
+  .toggle.on::after { left:20px; background:var(--accent); box-shadow:0 0 8px rgba(0,200,160,0.5); }
+  .toggle-label {
+    font-family:'DM Mono',monospace; font-size:11px; color:var(--text);
+    letter-spacing:0.06em;
+  }
+  .vol-slider {
+    -webkit-appearance:none; appearance:none; height:4px;
+    background:var(--bg2); border-radius:2px; outline:none;
+    border:1px solid var(--border);
+  }
+  .vol-slider::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; border-radius:50%;
+    background:var(--accent); cursor:pointer;
+    box-shadow:0 0 8px rgba(0,200,160,0.4);
+  }
+  .vol-slider::-moz-range-thumb {
+    width:16px; height:16px; border-radius:50%; border:none;
+    background:var(--accent); cursor:pointer;
+  }
+  .vol-slider:disabled { opacity:0.4; }
+  .vol-value {
+    font-family:'DM Mono',monospace; font-size:11px; color:var(--accent);
+    min-width:32px; text-align:right;
+  }
+
+  .feedback-warn {
+    display:none; align-items:flex-start; gap:8px;
+    background:rgba(255,184,74,0.08); border:1px solid rgba(255,184,74,0.25);
+    border-radius:8px; padding:9px 12px;
+    font-size:10px; color:var(--amber); line-height:1.5;
+  }
+  .feedback-warn.visible { display:flex; }
+  .feedback-warn .warn-icon { flex-shrink:0; font-size:12px; }
+
+  .level-row {
+    display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center;
+  }
+  .level-label {
+    font-family:'DM Mono',monospace; font-size:10px;
+    letter-spacing:0.1em; text-transform:uppercase; color:var(--textdim);
+  }
+  .level-bar {
+    height:8px; background:var(--bg2); border:1px solid var(--border);
+    border-radius:4px; overflow:hidden; position:relative;
+  }
+  .level-fill {
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent2) 50%, var(--amber) 80%, var(--warn) 100%);
+    border-radius:3px;
+    transition:width 0.08s linear;
+    box-shadow:0 0 8px rgba(0,200,160,0.4);
+  }
+  .level-fill.silent {
+    background:var(--muted);
+    box-shadow:none;
+  }
+  .level-value {
+    font-family:'DM Mono',monospace; font-size:10px; color:var(--accent);
+    min-width:42px; text-align:right;
+  }
+  .level-value.silent { color:var(--muted); }
+  .level-value.clipping { color:var(--warn); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <span class="brand">TruDiagnostics™ · CardioSense AI</span>
+    <h1 class="title">Acou<em>Scan</em>™</h1>
+    <p class="subtitle">Acoustic cardiac screening via USB-C earbud stethoscope.<br>Press one earbud to chest (left of sternum), wear the other to listen.</p>
+  </header>
+
+  <!-- Audio Input Panel -->
+  <div class="audio-panel">
+    <div class="ap-title">
+      <span>Audio Input</span>
+      <span id="ap-device-count" style="color:var(--textdim); font-weight:500; letter-spacing:0.08em;">Tap "Allow Mic" to detect devices</span>
+    </div>
+
+    <div class="audio-row">
+      <label for="device-select">Pickup microphone</label>
+      <select class="device-select" id="device-select" disabled>
+        <option value="">— Grant mic permission first —</option>
+      </select>
+      <div class="ap-hint">Plug in USB-C EarPods or similar, then tap the button below to enumerate. Pick the headset/USB-C option.</div>
+    </div>
+
+    <button class="btn btn-secondary" id="btn-detect" style="width:100%;">Allow Mic &amp; Detect Devices</button>
+
+    <div class="monitor-row">
+      <div class="toggle-wrap">
+        <div class="toggle" id="monitor-toggle" role="switch" aria-checked="false" tabindex="0"></div>
+        <span class="toggle-label">Live monitor</span>
+      </div>
+      <input type="range" class="vol-slider" id="vol-slider" min="0" max="100" value="50" disabled/>
+      <span class="vol-value" id="vol-value">50%</span>
+    </div>
+
+    <div class="feedback-warn" id="feedback-warn">
+      <span class="warn-icon">⚠</span>
+      <span>Live monitor is ON. Keep the pickup earbud pressed flat to your chest and the listening earbud in your ear — if they touch each other you'll get feedback howl. Start the volume low.</span>
+    </div>
+
+    <!-- Input level meter -->
+    <div class="level-row">
+      <span class="level-label">Mic input</span>
+      <div class="level-bar"><div class="level-fill" id="level-fill"></div></div>
+      <span class="level-value" id="level-value">—</span>
+    </div>
+
+    <button class="btn btn-secondary" id="btn-testtone" style="width:100%;">🔊 Test Tone (confirm headphone output)</button>
+  </div>
+
+  <!-- ── Ultrasonic BCG Panel (Arduino Uno + HC-SR04) ── -->
+  <div class="audio-panel" id="us-panel">
+    <div class="ap-title">
+      <span>Ultrasonic BCG · Arduino</span>
+      <span id="us-status" style="color:var(--textdim); font-weight:500; letter-spacing:0.08em;">Disconnected</span>
+    </div>
+
+    <div class="audio-row">
+      <div class="ap-hint" style="margin-top:0;">
+        Point HC-SR04 at chest ~3–5&nbsp;cm away. Measures chest-wall displacement (ballistocardiogram) — independent HR channel, cross-checks the acoustic reading.
+      </div>
+    </div>
+
+    <button class="btn btn-secondary" id="btn-us-connect" style="width:100%;">Connect Arduino (Web Serial)</button>
+
+    <!-- BCG waveform -->
+    <div class="wave-wrap" style="margin-top:4px;">
+      <canvas id="us-wave"></canvas>
+      <span class="wave-label">Chest displacement (filtered)</span>
+      <span class="wave-status">
+        <span class="dot" id="us-dot"></span>
+        <span id="us-text">Idle</span>
+      </span>
+    </div>
+
+    <!-- US metric row -->
+    <div class="metrics" style="margin-top:4px;">
+      <div class="metric" id="us-card-hr">
+        <span class="metric-label">US heart rate</span>
+        <span class="metric-value dim" id="us-val-hr">--</span>
+        <span class="metric-unit">bpm</span>
+      </div>
+      <div class="metric" id="us-card-rate">
+        <span class="metric-label">Sample rate</span>
+        <span class="metric-value dim" id="us-val-rate">--</span>
+        <span class="metric-unit">Hz</span>
+      </div>
+      <div class="metric" id="us-card-peaks">
+        <span class="metric-label">Beats</span>
+        <span class="metric-value dim" id="us-val-peaks">--</span>
+        <span class="metric-unit">detected</span>
+      </div>
+    </div>
+  </div>
+
+<!-- Waveform -->
+  <div class="wave-wrap">
+    <canvas id="waveform"></canvas>
+    <span class="wave-label">Acoustic signal</span>
+    <span class="wave-status" id="status-label">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">Idle</span>
+    </span>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="metric" id="card-hr">
+      <span class="metric-label">Heart rate</span>
+      <span class="metric-value dim" id="val-hr">--</span>
+      <span class="metric-unit">bpm</span>
+    </div>
+    <div class="metric" id="card-hrv">
+      <span class="metric-label">HRV (RMSSD)</span>
+      <span class="metric-value dim" id="val-hrv">--</span>
+      <span class="metric-unit">ms</span>
+    </div>
+    <div class="metric" id="card-peaks">
+      <span class="metric-label">S1 peaks</span>
+      <span class="metric-value dim" id="val-peaks">--</span>
+      <span class="metric-unit">detected</span>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="mini-card">
+      <div class="mini-label">Recording duration</div>
+      <div class="timer" id="timer-display">0:00</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-label">Signal quality</div>
+      <div class="quality-text" id="quality-text">—</div>
+      <div class="quality-bar"><div class="quality-fill" id="quality-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-primary" id="btn-record">Start Recording</button>
+    <button class="btn btn-secondary" id="btn-analyze" disabled>AI</button>
+    <button class="btn btn-secondary" id="btn-reset">↺</button>
+  </div>
+
+  <!-- Export row -->
+  <div class="export-row">
+    <button class="btn-export" id="btn-pdf" disabled>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="2" y="1" width="9" height="13" rx="1.5" stroke-width="1.3"/><path d="M5 5h5M5 8h5M5 11h3" stroke-width="1.1" stroke-linecap="round"/><path d="M11 4l3 3-3 3" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Export PDF
+    </button>
+    <button class="btn-export" id="btn-screenrec">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="1" y="2.5" width="14" height="10" rx="1.5" stroke-width="1.3"/><circle cx="8" cy="7.5" r="2.2" stroke-width="1.2"/><path d="M8 12.5v1.5M5.5 14h5" stroke-width="1.2" stroke-linecap="round"/></svg>
+      Screen Record
+    </button>
+  </div>
+
+  <!-- Recording banner -->
+  <div class="rec-banner" id="rec-banner">
+    <span class="rec-dot"></span>
+    Screen recording active — tap Stop to save MP4
+  </div>
+
+  <!-- Result panel -->
+  <div class="result-panel" id="result-panel">
+    <div class="result-header">
+      <span class="result-title">Claude Opus 4.7 interpretation</span>
+      <span class="result-badge" id="result-badge">Awaiting scan</span>
+    </div>
+    <div class="result-body empty" id="result-body">Record at least 15 seconds, then tap AI to analyze.</div>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    ⚠ Research / demo only. Not a medical device. Not for clinical diagnosis. Results do not replace professional cardiac evaluation.
+  </div>
+
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────
+let audioCtx, analyser, source, stream;
+let filterChain = null;       // { hpf1, hpf2, lpf1, lpf2, peaking, compressor, monitorGain, splitter }
+let isRecording = false;
+let recordStart = null;
+let timerInterval = null;
+let animFrame = null;
+
+// Signal buffers
+let sampleRate = 48000;                       // actual AudioContext rate — overwritten at init
+let pcmBuffer = new Float32Array(48000 * 60); // sized for 60s at default rate, re-allocated at init
+let pcmWritePos = 0;
+let scriptProcessor = null;
+
+// Audio device selection
+let selectedDeviceId = null;
+let availableInputs = [];
+
+// Live monitor state
+let monitorOn = false;
+let monitorGainValue = 0.5;
+
+// Peak detection state
+let peaks = [];          // timestamps (seconds from start)
+let lastPeakTime = 0;
+let rrIntervals = [];    // ms
+
+// Canvas
+const canvas = document.getElementById('waveform');
+const ctx2d = canvas.getContext('2d');
+let waveHistory = new Float32Array(600);
+let wavePos = 0;
+
+// DOM refs
+const btnRecord = document.getElementById('btn-record');
+const btnAnalyze = document.getElementById('btn-analyze');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const timerEl = document.getElementById('timer-display');
+const valHR = document.getElementById('val-hr');
+const valHRV = document.getElementById('val-hrv');
+const valPeaks = document.getElementById('val-peaks');
+const qualityText = document.getElementById('quality-text');
+const qualityFill = document.getElementById('quality-fill');
+const resultPanel = document.getElementById('result-panel');
+const resultBody = document.getElementById('result-body');
+const resultBadge = document.getElementById('result-badge');
+const cardHR = document.getElementById('card-hr');
+const cardHRV = document.getElementById('card-hrv');
+const cardPeaks = document.getElementById('card-peaks');
+
+// ──────────────────────────────────────────────
+// CANVAS RESIZE
+// ──────────────────────────────────────────────
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 140 * dpr;
+  ctx2d.scale(dpr, dpr);
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = '140px';
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ──────────────────────────────────────────────
+// WAVEFORM DRAW
+// ──────────────────────────────────────────────
+function drawWaveform(dataArray) {
+  const W = canvas.width / (window.devicePixelRatio || 1);
+  const H = 140;
+  ctx2d.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx2d.strokeStyle = 'rgba(0,200,160,0.06)';
+  ctx2d.lineWidth = 0.5;
+  for (let i = 1; i < 4; i++) {
+    ctx2d.beginPath();
+    ctx2d.moveTo(0, H * i / 4);
+    ctx2d.lineTo(W, H * i / 4);
+    ctx2d.stroke();
+  }
+
+  if (!dataArray) {
+    // Flat idle line
+    ctx2d.strokeStyle = 'rgba(0,200,160,0.2)';
+    ctx2d.lineWidth = 1;
+    ctx2d.beginPath();
+    ctx2d.moveTo(0, H / 2);
+    ctx2d.lineTo(W, H / 2);
+    ctx2d.stroke();
+    return;
+  }
+
+  // Push new samples into rolling history
+  const step = Math.floor(dataArray.length / 4);
+  for (let i = 0; i < 4; i++) {
+    waveHistory[wavePos % waveHistory.length] = dataArray[i * step] / 128 - 1;
+    wavePos++;
+  }
+
+  // Draw trace
+  const grad = ctx2d.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, 'rgba(0,200,160,0)');
+  grad.addColorStop(0.15, 'rgba(0,200,160,0.7)');
+  grad.addColorStop(0.85, 'rgba(0,200,160,0.9)');
+  grad.addColorStop(1, 'rgba(0,229,184,1)');
+
+  ctx2d.beginPath();
+  ctx2d.strokeStyle = grad;
+  ctx2d.lineWidth = 1.5;
+  ctx2d.lineJoin = 'round';
+  const N = waveHistory.length;
+  for (let i = 0; i < N; i++) {
+    const idx = (wavePos + i) % N;
+    const x = (i / N) * W;
+    const y = H / 2 - (waveHistory[idx] * H * 0.4);
+    if (i === 0) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+  }
+  ctx2d.stroke();
+
+  // Glow duplicate
+  ctx2d.beginPath();
+  ctx2d.strokeStyle = 'rgba(0,200,160,0.12)';
+  ctx2d.lineWidth = 5;
+  for (let i = 0; i < N; i++) {
+    const idx = (wavePos + i) % N;
+    const x = (i / N) * W;
+    const y = H / 2 - (waveHistory[idx] * H * 0.4);
+    if (i === 0) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+  }
+  ctx2d.stroke();
+}
+
+// ──────────────────────────────────────────────
+// FILTER CHAIN — Web Audio BiquadFilterNode cascade
+// ──────────────────────────────────────────────
+// 4th-order HPF @ 20 Hz (removes body-motion rumble, breathing, DC drift)
+// 4th-order LPF @ 200 Hz (removes voice/ambient high-frequency noise)
+// Peaking filter @ 45 Hz (+3dB boost at S1/S2 fundamental band)
+// DynamicsCompressor as a gentle noise gate (soft knee, high threshold)
+// Monitor GainNode gates playback to destination for live monitoring
+// ──────────────────────────────────────────────
+function buildFilterChain(ctx) {
+  const hpf1 = ctx.createBiquadFilter();
+  hpf1.type = 'highpass';
+  hpf1.frequency.value = 20;
+  hpf1.Q.value = 0.707;
+
+  const hpf2 = ctx.createBiquadFilter();
+  hpf2.type = 'highpass';
+  hpf2.frequency.value = 20;
+  hpf2.Q.value = 0.707;
+
+  const lpf1 = ctx.createBiquadFilter();
+  lpf1.type = 'lowpass';
+  lpf1.frequency.value = 200;
+  lpf1.Q.value = 0.707;
+
+  const lpf2 = ctx.createBiquadFilter();
+  lpf2.type = 'lowpass';
+  lpf2.frequency.value = 200;
+  lpf2.Q.value = 0.707;
+
+  const peaking = ctx.createBiquadFilter();
+  peaking.type = 'peaking';
+  peaking.frequency.value = 45;
+  peaking.Q.value = 1.0;
+  peaking.gain.value = 3;
+
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -24;
+  compressor.knee.value = 30;
+  compressor.ratio.value = 4;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.25;
+
+  const monitorGain = ctx.createGain();
+  monitorGain.gain.value = 0;  // start muted to prevent feedback
+
+  // Wire the filter chain: mic → HPF×2 → LPF×2 → Peaking → Compressor
+  hpf1.connect(hpf2);
+  hpf2.connect(lpf1);
+  lpf1.connect(lpf2);
+  lpf2.connect(peaking);
+  peaking.connect(compressor);
+  // Output of `compressor` is the clean signal — callers fan it out.
+
+  return { input: hpf1, output: compressor, monitorGain };
+}
+
+// ──────────────────────────────────────────────
+// PEAK DETECTOR
+// Simple threshold + refractory period
+// ──────────────────────────────────────────────
+let rmsWindow = [];
+let REFRACTORY_SAMPLES = 13230; // 300ms @ 44.1kHz — recomputed at recording start
+let RMS_WINDOW_LEN = 441;        // 10ms @ 44.1kHz — recomputed at recording start
+let refractoryCtr = 0;
+let peakThreshold = 0.01;
+let peakThreshAdapt = 0;
+
+function detectPeak(sample, absSample, elapsedSec) {
+  rmsWindow.push(absSample);
+  if (rmsWindow.length > RMS_WINDOW_LEN) rmsWindow.shift(); // 10ms window
+
+  // Adapt threshold
+  const rms = Math.sqrt(rmsWindow.reduce((s,v)=>s+v*v,0)/rmsWindow.length);
+  peakThreshAdapt = peakThreshAdapt * 0.999 + rms * 0.001;
+  peakThreshold = Math.max(0.005, peakThreshAdapt * 2.5);
+
+  if (refractoryCtr > 0) { refractoryCtr--; return false; }
+
+  if (absSample > peakThreshold && absSample > 0.005) {
+    const rrMs = peaks.length > 0 ? (elapsedSec - peaks[peaks.length-1]) * 1000 : null;
+    if (rrMs === null || (rrMs > 300 && rrMs < 2000)) {
+      peaks.push(elapsedSec);
+      if (rrMs !== null) rrIntervals.push(rrMs);
+      if (rrIntervals.length > 30) rrIntervals.shift();
+      refractoryCtr = REFRACTORY_SAMPLES;
+      return true;
+    }
+  }
+  return false;
+}
+
+// ──────────────────────────────────────────────
+// METRICS CALCULATION
+// ──────────────────────────────────────────────
+function calcMetrics() {
+  const n = rrIntervals.length;
+  if (n < 2) return null;
+
+  const meanRR = rrIntervals.reduce((a,b)=>a+b,0)/n;
+  const hr = Math.round(60000 / meanRR);
+
+  // RMSSD
+  let sqSum = 0;
+  for (let i = 1; i < n; i++) sqSum += Math.pow(rrIntervals[i]-rrIntervals[i-1], 2);
+  const rmssd = Math.round(Math.sqrt(sqSum/(n-1)));
+
+  // Signal quality: based on RR interval coefficient of variation
+  const sd = Math.sqrt(rrIntervals.reduce((s,v)=>s+Math.pow(v-meanRR,2),0)/n);
+  const cv = sd / meanRR;
+  const quality = Math.max(0, Math.min(100, Math.round(100 * (1 - cv * 3))));
+
+  return { hr, rmssd, quality, peakCount: peaks.length };
+}
+
+function updateMetricsUI() {
+  const m = calcMetrics();
+  if (!m) return;
+
+  const { hr, rmssd, quality, peakCount } = m;
+
+  valHR.textContent = hr;
+  valHR.className = 'metric-value ' + (hr < 50 || hr > 110 ? 'warn' : 'ok');
+  cardHR.classList.add('active');
+
+  valHRV.textContent = rmssd;
+  valHRV.className = 'metric-value ' + (rmssd < 20 ? 'warn' : 'ok');
+  cardHRV.classList.add('active');
+
+  valPeaks.textContent = peakCount;
+  valPeaks.className = 'metric-value ok';
+  cardPeaks.classList.add('active');
+
+  const qLabel = quality > 75 ? 'Excellent' : quality > 50 ? 'Good' : quality > 30 ? 'Fair' : 'Poor';
+  qualityText.textContent = qLabel;
+  qualityFill.style.width = quality + '%';
+  qualityFill.style.background = quality > 60 ? 'var(--accent)' : quality > 35 ? 'var(--amber)' : 'var(--warn)';
+}
+
+// ──────────────────────────────────────────────
+// TIMER
+// ──────────────────────────────────────────────
+function formatTime(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+
+// ──────────────────────────────────────────────
+// START / STOP
+// ──────────────────────────────────────────────
+btnRecord.addEventListener('click', async () => {
+  if (!isRecording) await startRecording();
+  else stopRecording();
+});
+
+async function startRecording() {
+  try {
+    const audioConstraints = {
+      channelCount: 1,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+    // If user picked a specific input device, pin to it.
+    if (selectedDeviceId) {
+      audioConstraints.deviceId = { exact: selectedDeviceId };
+    }
+    stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+  } catch(e) {
+    // Fallback: try without the exact deviceId — iOS sometimes rejects exact constraint
+    if (selectedDeviceId) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
+      } catch(e2) {
+        alert('Microphone permission denied. In iOS: Settings → Safari → Microphone → Allow.');
+        return;
+      }
+    } else {
+      alert('Microphone permission denied. In iOS: Settings → Safari → Microphone → Allow.');
+      return;
+    }
+  }
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // iOS Safari: AudioContext starts suspended after an awaited getUserMedia —
+  // explicitly resume so the graph actually runs and audio reaches the destination.
+  if (audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch(e) { console.warn('AudioContext resume failed', e); }
+  }
+  // Safari on iOS ignores requested sampleRate — use whatever the context gives us.
+  sampleRate = audioCtx.sampleRate;
+
+  // Recompute sample-rate-dependent constants
+  REFRACTORY_SAMPLES = Math.round(sampleRate * 0.3);
+  RMS_WINDOW_LEN = Math.round(sampleRate * 0.01);
+  pcmBuffer = new Float32Array(Math.round(sampleRate * 60));
+
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.1;
+
+  source = audioCtx.createMediaStreamSource(stream);
+  filterChain = buildFilterChain(audioCtx);
+
+  // Wire: source → filter chain → [analyser + scriptProcessor + monitorGain→destination]
+  source.connect(filterChain.input);
+
+  // ScriptProcessor for peak detection + PCM capture (reads post-filter signal)
+  scriptProcessor = audioCtx.createScriptProcessor(2048, 1, 1);
+  filterChain.output.connect(scriptProcessor);
+  // ScriptProcessor must be connected to destination to fire onaudioprocess in Safari,
+  // but we don't want it to output anything — its output buffer stays silent.
+  scriptProcessor.connect(audioCtx.destination);
+
+  scriptProcessor.onaudioprocess = (e) => {
+    const input = e.inputBuffer.getChannelData(0);
+    const output = e.outputBuffer.getChannelData(0);
+    const elapsed = (Date.now() - recordStart) / 1000;
+    const pcmMax = pcmBuffer.length;
+    let peak = 0;
+    let sumSq = 0;
+    for (let i = 0; i < input.length; i++) {
+      const s = input[i];  // already filtered by the Web Audio chain
+      output[i] = 0;       // keep scriptProcessor output silent — monitor path handles playback
+      if (pcmWritePos < pcmMax) pcmBuffer[pcmWritePos++] = s;
+      const abs = Math.abs(s);
+      if (abs > peak) peak = abs;
+      sumSq += s * s;
+      const t = elapsed + i / sampleRate;
+      detectPeak(s, abs, t);
+    }
+    const rmsAmp = Math.sqrt(sumSq / input.length);
+    updateLevelMeter(peak, rmsAmp);
+    updateMetricsUI();
+  };
+
+  // Analyser taps the filtered signal for waveform display
+  filterChain.output.connect(analyser);
+
+  // Monitor path: filter → monitorGain → destination (played through headphones when gain > 0)
+  filterChain.output.connect(filterChain.monitorGain);
+  filterChain.monitorGain.connect(audioCtx.destination);
+  applyMonitorState();
+
+  // Reset state
+  peaks = []; rrIntervals = [];
+  pcmWritePos = 0;
+  waveHistory = new Float32Array(600);
+  wavePos = 0;
+  peakThreshAdapt = 0;
+  rmsWindow = [];
+  refractoryCtr = 0;
+  valHR.textContent='--'; valHR.className='metric-value dim';
+  valHRV.textContent='--'; valHRV.className='metric-value dim';
+  valPeaks.textContent='--'; valPeaks.className='metric-value dim';
+  cardHR.classList.remove('active'); cardHRV.classList.remove('active'); cardPeaks.classList.remove('active');
+  qualityText.textContent='—'; qualityFill.style.width='0%';
+  resultBody.textContent='Recording… analyze when done.';
+  resultBody.className='result-body empty';
+  resultBadge.textContent='Recording';
+  resultBadge.className='result-badge amber';
+  resultPanel.classList.remove('has-result');
+
+  recordStart = Date.now();
+  isRecording = true;
+  btnRecord.textContent = 'Stop Recording';
+  btnRecord.classList.add('recording');
+  btnAnalyze.disabled = true;
+  statusDot.className = 'dot live';
+  statusText.textContent = 'Live';
+
+  timerInterval = setInterval(() => {
+    timerEl.textContent = formatTime(Date.now() - recordStart);
+    // Enable analyze after 10s
+    if (Date.now() - recordStart > 10000) btnAnalyze.disabled = false;
+  }, 200);
+
+  drawLoop();
+}
+
+function drawLoop() {
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(data);
+  drawWaveform(data);
+  animFrame = requestAnimationFrame(drawLoop);
+}
+
+function stopRecording() {
+  isRecording = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  if (timerInterval) clearInterval(timerInterval);
+  try { scriptProcessor && scriptProcessor.disconnect(); } catch(e) {}
+  try { source && source.disconnect(); } catch(e) {}
+  if (filterChain) {
+    try { filterChain.input.disconnect(); } catch(e) {}
+    try { filterChain.output.disconnect(); } catch(e) {}
+    try { filterChain.monitorGain.disconnect(); } catch(e) {}
+    filterChain = null;
+  }
+  stream && stream.getTracks().forEach(t => t.stop());
+  audioCtx && audioCtx.state !== 'closed' && audioCtx.close();
+
+  btnRecord.textContent = 'Start Recording';
+  btnRecord.classList.remove('recording');
+  statusDot.className = 'dot';
+  statusText.textContent = 'Stopped';
+  drawWaveform(null);
+  resetLevelMeter();
+
+  updateMetricsUI();
+  btnAnalyze.disabled = (peaks.length < 3);
+}
+
+function resetLevelMeter() {
+  if (!levelFill) return;
+  levelFill.style.width = '0%';
+  levelFill.classList.remove('silent');
+  levelValue.classList.remove('silent', 'clipping');
+  levelValue.textContent = '—';
+}
+
+// ──────────────────────────────────────────────
+// DEVICE PICKER + LIVE MONITOR
+// ──────────────────────────────────────────────
+const btnDetect = document.getElementById('btn-detect');
+const deviceSelect = document.getElementById('device-select');
+const deviceCountEl = document.getElementById('ap-device-count');
+const monitorToggle = document.getElementById('monitor-toggle');
+const volSlider = document.getElementById('vol-slider');
+const volValue = document.getElementById('vol-value');
+const feedbackWarn = document.getElementById('feedback-warn');
+
+async function enumerateInputs() {
+  // iOS Safari only returns labels after mic permission is granted — so we request it first.
+  try {
+    const tempStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    // Immediately stop the temp stream — we only wanted permission.
+    tempStream.getTracks().forEach(t => t.stop());
+  } catch (e) {
+    deviceCountEl.textContent = 'Mic permission denied';
+    alert('Microphone permission is required. In iOS: Settings → Safari → Microphone → Allow.');
+    return;
+  }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    availableInputs = devices.filter(d => d.kind === 'audioinput');
+    deviceSelect.innerHTML = '';
+    if (availableInputs.length === 0) {
+      deviceSelect.innerHTML = '<option value="">No inputs found</option>';
+      deviceCountEl.textContent = '0 devices';
+      deviceSelect.disabled = true;
+      return;
+    }
+    availableInputs.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      // Labels like "Headset Microphone (Apple USB-C)" or "iPhone Microphone"
+      opt.textContent = d.label || `Microphone ${i + 1}`;
+      deviceSelect.appendChild(opt);
+    });
+    deviceSelect.disabled = false;
+    deviceCountEl.textContent = `${availableInputs.length} device${availableInputs.length > 1 ? 's' : ''} found`;
+
+    // Auto-pick a headset / USB-C / external input if present
+    const preferred = availableInputs.find(d => {
+      const label = (d.label || '').toLowerCase();
+      return label.includes('headset') || label.includes('usb') || label.includes('earpod') || label.includes('external');
+    });
+    if (preferred) {
+      deviceSelect.value = preferred.deviceId;
+      selectedDeviceId = preferred.deviceId;
+    } else {
+      selectedDeviceId = availableInputs[0].deviceId;
+    }
+    btnDetect.textContent = 'Re-scan Devices';
+  } catch (e) {
+    console.error('enumerateDevices failed', e);
+    deviceCountEl.textContent = 'Enumeration failed';
+  }
+}
+
+btnDetect.addEventListener('click', enumerateInputs);
+deviceSelect.addEventListener('change', (e) => {
+  selectedDeviceId = e.target.value || null;
+  // If recording, warn the user that switch takes effect next start
+  if (isRecording) {
+    statusText.textContent = 'Restart to apply';
+  }
+});
+
+function applyMonitorState() {
+  if (!filterChain) return;
+  const target = monitorOn ? monitorGainValue : 0;
+  const now = audioCtx.currentTime;
+  // Smooth ramp to avoid clicks
+  filterChain.monitorGain.gain.cancelScheduledValues(now);
+  filterChain.monitorGain.gain.setValueAtTime(filterChain.monitorGain.gain.value, now);
+  filterChain.monitorGain.gain.linearRampToValueAtTime(target, now + 0.03);
+}
+
+function setMonitor(on) {
+  monitorOn = on;
+  monitorToggle.classList.toggle('on', on);
+  monitorToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+  volSlider.disabled = !on;
+  feedbackWarn.classList.toggle('visible', on);
+  applyMonitorState();
+}
+
+monitorToggle.addEventListener('click', () => setMonitor(!monitorOn));
+monitorToggle.addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setMonitor(!monitorOn); }
+});
+
+volSlider.addEventListener('input', (e) => {
+  const pct = parseInt(e.target.value, 10);
+  volValue.textContent = pct + '%';
+  // Exponential curve feels more natural than linear for perceived loudness.
+  monitorGainValue = Math.pow(pct / 100, 2);
+  applyMonitorState();
+});
+
+// Detect device hot-plug (USB-C headphones plugged in mid-session)
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', () => {
+    if (availableInputs.length > 0) {
+      enumerateInputs();
+    }
+  });
+}
+
+// ──────────────────────────────────────────────
+// INPUT LEVEL METER — shows post-filter signal strength in dBFS
+// ──────────────────────────────────────────────
+const levelFill = document.getElementById('level-fill');
+const levelValue = document.getElementById('level-value');
+let lastLevelUpdate = 0;
+
+function updateLevelMeter(peak, rms) {
+  // Throttle DOM updates to ~20fps
+  const now = performance.now();
+  if (now - lastLevelUpdate < 50) return;
+  lastLevelUpdate = now;
+
+  // Use peak for responsive meter; convert to dBFS
+  const dbfs = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+  // Map -60 dBFS → 0%, 0 dBFS → 100%
+  const pct = Math.max(0, Math.min(100, (dbfs + 60) / 60 * 100));
+
+  levelFill.style.width = pct + '%';
+  const silent = dbfs < -55;
+  const clipping = dbfs > -3;
+  levelFill.classList.toggle('silent', silent);
+  levelValue.classList.toggle('silent', silent);
+  levelValue.classList.toggle('clipping', clipping);
+
+  if (silent) {
+    levelValue.textContent = 'SILENT';
+  } else if (clipping) {
+    levelValue.textContent = 'CLIP';
+  } else {
+    levelValue.textContent = dbfs.toFixed(0) + ' dB';
+  }
+}
+
+// ──────────────────────────────────────────────
+// TEST TONE — confirms audio is routed through headphones
+// ──────────────────────────────────────────────
+const btnTestTone = document.getElementById('btn-testtone');
+btnTestTone.addEventListener('click', async () => {
+  if (btnTestTone.disabled) return;
+  btnTestTone.disabled = true;
+  btnTestTone.textContent = '🔊 Playing tone…';
+  const testCtx = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    if (testCtx.state === 'suspended') await testCtx.resume();
+    const osc = testCtx.createOscillator();
+    const gain = testCtx.createGain();
+    osc.frequency.value = 440;
+    osc.type = 'sine';
+    // Fade in/out to avoid click
+    const t0 = testCtx.currentTime;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(0.25, t0 + 0.05);
+    gain.gain.setValueAtTime(0.25, t0 + 0.7);
+    gain.gain.linearRampToValueAtTime(0, t0 + 0.8);
+    osc.connect(gain);
+    gain.connect(testCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.85);
+    await new Promise((r) => setTimeout(r, 900));
+  } catch (e) {
+    console.warn('test tone failed', e);
+  }
+  try { await testCtx.close(); } catch(e) {}
+  btnTestTone.disabled = false;
+  btnTestTone.textContent = '🔊 Test Tone (confirm headphone output)';
+});
+
+// ──────────────────────────────────────────────
+// AI ANALYSIS
+// ──────────────────────────────────────────────
+btnAnalyze.addEventListener('click', async () => {
+  const m = calcMetrics();
+  if (!m) { alert('Not enough cardiac data yet. Record more.'); return; }
+
+  btnAnalyze.disabled = true;
+  statusDot.className = 'dot analyzing';
+  statusText.textContent = 'Analyzing…';
+  resultBody.innerHTML = '<span class="thinking"><span></span><span></span><span></span></span> Claude is interpreting the signal…';
+  resultBody.className = 'result-body';
+  resultBadge.textContent = 'Analyzing';
+  resultBadge.className = 'result-badge amber';
+
+  const duration = pcmWritePos / sampleRate;
+
+  // Build signal feature summary
+  const rrStr = rrIntervals.slice(-10).map(v=>v.toFixed(0)).join(', ');
+  const prompt = `You are a cardiac signal analysis assistant within the CardioSense AI / AcouScan™ platform (research/demo use only, not a medical device).
+
+Analyze this acoustic cardiac signal captured via smartphone microphone:
+
+SIGNAL METRICS:
+- Recording duration: ${duration.toFixed(1)} seconds
+- Detected S1 peaks: ${m.peakCount}
+- Estimated heart rate: ${m.hr} bpm
+- HRV RMSSD: ${m.rmssd} ms
+- Signal quality score: ${m.quality}%
+- Recent RR intervals (ms): [${rrStr}]
+
+Provide a concise structured interpretation:
+1. Heart rate assessment (normal/bradycardia/tachycardia)
+2. HRV interpretation (low/normal/high autonomic tone)
+3. Rhythm regularity (from RR interval variance)
+4. Signal quality notes
+5. One-line clinical context note (with research/demo disclaimer)
+
+Keep it under 180 words. Use plain language. Do not diagnose.`;
+
+  try {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = data.content[0].text;
+    resultBody.textContent = text;
+    resultBody.className = 'result-body';
+    resultPanel.classList.add('has-result');
+
+    // Badge based on HR
+    const hrVal = m.hr;
+    if (hrVal < 50 || hrVal > 110) {
+      resultBadge.textContent = 'Review';
+      resultBadge.className = 'result-badge warn';
+    } else {
+      resultBadge.textContent = 'Normal range';
+      resultBadge.className = 'result-badge';
+    }
+
+  } catch(e) {
+    resultBody.textContent = 'Analysis failed: ' + e.message;
+    resultBody.className = 'result-body';
+    resultBadge.textContent = 'Error';
+    resultBadge.className = 'result-badge warn';
+  }
+
+  btnAnalyze.disabled = false;
+  statusDot.className = 'dot';
+  statusText.textContent = 'Idle';
+});
+
+// ── RESET ────────────────────────────────────
+const btnReset = document.getElementById('btn-reset');
+btnReset.addEventListener('click', () => {
+  if (isRecording) stopRecording();
+  peaks = []; rrIntervals = [];
+  pcmWritePos = 0;
+  pcmBuffer = new Float32Array(Math.round(sampleRate * 60));
+  waveHistory = new Float32Array(600);
+  wavePos = 0;
+  peakThreshAdapt = 0;
+  rmsWindow = [];
+  refractoryCtr = 0;
+
+  valHR.textContent = '--'; valHR.className = 'metric-value dim';
+  valHRV.textContent = '--'; valHRV.className = 'metric-value dim';
+  valPeaks.textContent = '--'; valPeaks.className = 'metric-value dim';
+  cardHR.classList.remove('active'); cardHRV.classList.remove('active'); cardPeaks.classList.remove('active');
+  qualityText.textContent = '—'; qualityFill.style.width = '0%';
+  timerEl.textContent = '0:00';
+  btnAnalyze.disabled = true;
+  btnPdf.disabled = true;
+  resetLevelMeter();
+
+  resultBody.textContent = 'Record at least 15 seconds, then tap AI to analyze.';
+  resultBody.className = 'result-body empty';
+  resultBadge.textContent = 'Awaiting scan';
+  resultBadge.className = 'result-badge';
+  resultPanel.classList.remove('has-result');
+
+  statusDot.className = 'dot';
+  statusText.textContent = 'Idle';
+  drawWaveform(null);
+});
+
+// Initial idle waveform
+drawWaveform(null);
+
+// ── PDF EXPORT ──────────────────────────────────
+const btnPdf = document.getElementById('btn-pdf');
+const btnScreenRec = document.getElementById('btn-screenrec');
+const recBanner = document.getElementById('rec-banner');
+
+// Enable PDF after AI result arrives
+new MutationObserver(() => {
+  if (resultPanel.classList.contains('has-result')) btnPdf.disabled = false;
+}).observe(resultPanel, { attributes: true, attributeFilter: ['class'] });
+
+btnPdf.addEventListener('click', () => {
+  if (!window.jspdf) { alert('PDF library not loaded yet. Try again in a moment.'); return; }
+  const m = calcMetrics();
+  const aiText = resultBody.textContent || '';
+  const duration = (pcmWritePos / sampleRate).toFixed(1);
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, ml = 18, cw = 210 - ml * 2;
+  let y = 0;
+
+  // Dark header bar
+  doc.setFillColor(7, 30, 39);
+  doc.rect(0, 0, W, 40, 'F');
+  doc.setTextColor(0, 200, 160);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TRUDIAGNOSTICS™  ·  CARDIOSENSE AI', ml, 13);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.text('AcouScan\u2122 Cardiac Screening Report', ml, 29);
+  doc.setTextColor(0, 200, 160);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(dateStr + '  \u00b7  ' + timeStr, W - ml, 29, { align: 'right' });
+  y = 52;
+
+  // Metrics block
+  if (m) {
+    doc.setFillColor(15, 30, 39);
+    doc.setDrawColor(0, 200, 160);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(ml, y, cw, 50, 3, 3, 'FD');
+    doc.setTextColor(0, 200, 160);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SIGNAL METRICS', ml + 5, y + 8);
+    const cols = [
+      ['Heart Rate', m.hr + ' bpm', m.hr < 50 || m.hr > 110 ? [255,107,74] : [74,255,184]],
+      ['HRV RMSSD', m.rmssd + ' ms', m.rmssd < 20 ? [255,107,74] : [74,255,184]],
+      ['S1 Peaks', String(m.peakCount), [74,255,184]],
+      ['Duration', duration + ' s', [212,237,232]],
+      ['Quality', m.quality + '%', m.quality > 60 ? [74,255,184] : m.quality > 35 ? [255,184,74] : [255,107,74]],
+    ];
+    const colW = cw / cols.length;
+    cols.forEach(([label, val, clr], i) => {
+      const cx = ml + i * colW + colW / 2;
+      doc.setTextColor(106, 158, 148); doc.setFontSize(6.5); doc.setFont('helvetica','normal');
+      doc.text(label.toUpperCase(), cx, y + 20, { align: 'center' });
+      doc.setTextColor(...clr); doc.setFontSize(15); doc.setFont('helvetica','bold');
+      doc.text(val, cx, y + 36, { align: 'center' });
+    });
+    y += 58;
+  }
+
+  // RR intervals
+  if (rrIntervals.length > 1) {
+    doc.setFillColor(15, 30, 39);
+    doc.setDrawColor(0, 200, 160);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(ml, y, cw, 26, 3, 3, 'FD');
+    doc.setTextColor(0, 200, 160); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text('RR INTERVALS (last 10, ms)', ml + 5, y + 8);
+    doc.setTextColor(212, 237, 232); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text(rrIntervals.slice(-10).map(v => v.toFixed(0)).join('  \u00b7  '), ml + 5, y + 19);
+    y += 34;
+  }
+
+  // Waveform snapshot
+  try {
+    const img = canvas.toDataURL('image/png');
+    doc.setFillColor(15, 30, 39); doc.setDrawColor(0, 200, 160); doc.setLineWidth(0.3);
+    doc.roundedRect(ml, y, cw, 46, 3, 3, 'FD');
+    doc.setTextColor(0, 200, 160); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text('ACOUSTIC WAVEFORM SNAPSHOT', ml + 5, y + 8);
+    doc.addImage(img, 'PNG', ml + 3, y + 12, cw - 6, 28);
+    y += 54;
+  } catch(e) {}
+
+  // AI interpretation
+  if (aiText && !aiText.includes('Record at least') && !aiText.includes('Recording') && !aiText.includes('Claude is')) {
+    const lines = doc.splitTextToSize(aiText, cw - 10);
+    const bh = 14 + lines.length * 5.4;
+    doc.setFillColor(15, 30, 39); doc.setDrawColor(0, 200, 160); doc.setLineWidth(0.3);
+    doc.roundedRect(ml, y, cw, bh, 3, 3, 'FD');
+    doc.setTextColor(0, 200, 160); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text('CLAUDE OPUS 4.7 INTERPRETATION', ml + 5, y + 8);
+    doc.setTextColor(212, 237, 232); doc.setFontSize(8.5); doc.setFont('helvetica','normal');
+    doc.text(lines, ml + 5, y + 16);
+    y += bh + 6;
+  }
+
+  // Disclaimer footer
+  doc.setFillColor(30, 10, 10); doc.setDrawColor(255, 107, 74); doc.setLineWidth(0.3);
+  doc.roundedRect(ml, 278, cw, 11, 2, 2, 'FD');
+  doc.setTextColor(255, 107, 74); doc.setFontSize(6.5); doc.setFont('helvetica','bold');
+  doc.text('\u26a0  RESEARCH / DEMO ONLY \u2014 NOT A MEDICAL DEVICE \u2014 NOT FOR CLINICAL DIAGNOSIS', ml + 4, 285);
+
+  doc.save('AcouScan_Report_' + now.toISOString().slice(0,10) + '.pdf');
+});
+
+// ── SCREEN RECORDING ─────────────────────────
+let screenStream = null, mediaRecorder = null, recordedChunks = [], isScreenRec = false;
+
+btnScreenRec.addEventListener('click', async () => {
+  if (isScreenRec) { stopScreenRec(); return; }
+
+  let capStream = null;
+  if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+    try { capStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false }); }
+    catch(e) { capStream = null; }
+  }
+  if (!capStream) {
+    // Canvas fallback — works on iPhone
+    capStream = canvas.captureStream(30);
+  }
+
+  screenStream = capStream;
+  recordedChunks = [];
+  const mime = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+  try { mediaRecorder = new MediaRecorder(capStream, mime ? { mimeType: mime } : {}); }
+  catch(e) { alert('Screen recording not supported in this browser. Try Chrome desktop.'); capStream.getTracks().forEach(t=>t.stop()); return; }
+
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(recordedChunks, { type: mime || 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = 'AcouScan_Demo_' + new Date().toISOString().slice(0,10) + '.' + ext;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    isScreenRec = false;
+    btnScreenRec.classList.remove('rec-active');
+    btnScreenRec.innerHTML = iconCam + ' Screen Record';
+    recBanner.classList.remove('visible');
+    screenStream && screenStream.getTracks().forEach(t=>t.stop());
+  };
+  capStream.getVideoTracks()[0] && (capStream.getVideoTracks()[0].onended = () => { if(isScreenRec) stopScreenRec(); });
+
+  mediaRecorder.start(200);
+  isScreenRec = true;
+  btnScreenRec.classList.add('rec-active');
+  btnScreenRec.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="2" y="2" width="12" height="12" rx="2"/></svg> Stop Recording';
+  recBanner.classList.add('visible');
+});
+
+const iconCam = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="1" y="2.5" width="14" height="10" rx="1.5" stroke-width="1.3"/><circle cx="8" cy="7.5" r="2.2" stroke-width="1.2"/><path d="M8 12.5v1.5M5.5 14h5" stroke-width="1.2" stroke-linecap="round"/></svg>';
+
+function stopScreenRec() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+}
+
+// ──────────────────────────────────────────────
+// PWA — service worker registration
+// ──────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('SW registration failed:', err));
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ULTRASONIC BCG MODULE — Arduino Uno + HC-SR04 via Web Serial
+// ══════════════════════════════════════════════════════════════════
+// Receives lines of form "<distance_mm>,<millis>\n" from the Uno.
+// Pipeline: parse → detrend (HPF 0.7 Hz) → LPF 3 Hz → adaptive peak → HR.
+// Completely independent of the acoustic path — runs in parallel.
+(function() {
+  'use strict';
+
+  // ── DOM ──
+  const btnConnect = document.getElementById('btn-us-connect');
+  const statusEl   = document.getElementById('us-status');
+  const dotEl      = document.getElementById('us-dot');
+  const textEl     = document.getElementById('us-text');
+  const valHrEl    = document.getElementById('us-val-hr');
+  const valRateEl  = document.getElementById('us-val-rate');
+  const valPeaksEl = document.getElementById('us-val-peaks');
+  const cardHr     = document.getElementById('us-card-hr');
+  const cardPeaks  = document.getElementById('us-card-peaks');
+  const waveCanvas = document.getElementById('us-wave');
+  const waveCtx    = waveCanvas.getContext('2d');
+
+  // ── Web Serial availability ──
+  if (!('serial' in navigator)) {
+    btnConnect.textContent = 'Web Serial not supported (use Chrome/Edge desktop)';
+    btnConnect.disabled = true;
+    statusEl.textContent = 'Unsupported';
+    return;
+  }
+
+  // ── State ──
+  let port = null;
+  let reader = null;
+  let readLoopAlive = false;
+  let lineBuf = '';
+
+  // Signal state — all at ~50 Hz sample rate
+  const WAVE_LEN = 400;
+  const waveHistory = new Float32Array(WAVE_LEN);
+  let wavePos = 0;
+
+  let rawPrev = null;     // last distance in mm
+  let hpfY = 0;           // high-pass output (removes breathing/DC)
+  let lpfY = 0;           // low-pass output (smooths noise)
+
+  // Sample-rate estimation
+  let lastSampleMs = null;
+  const dtWindow = [];    // rolling window of inter-sample delta-t in ms
+  let effectiveFs = 50;   // Hz — estimated from actual stream
+
+  // Peak detection
+  const peaks = [];       // timestamps in ms (stream time)
+  let lastPeakMs = 0;
+  let adaptiveThresh = 0.02;  // in mm, auto-scales
+  const rmsWin = [];
+  const RMS_LEN = 50;           // 1s of samples @ 50Hz
+
+  // ── Biquad coefficients ──
+  // Single-pole IIR high-pass, cutoff fc:  α = e^(-2π fc / fs)
+  //   y[n] = α*(y[n-1] + x[n] - x[n-1])
+  // Single-pole IIR low-pass,  cutoff fc:  α = e^(-2π fc / fs)
+  //   y[n] = α*y[n-1] + (1-α)*x[n]
+  // We keep α scalars and recompute them if fs drifts.
+  const HPF_FC = 0.7;  // Hz — kill breathing (0.2-0.4 Hz) and DC
+  const LPF_FC = 3.0;  // Hz — keep heartbeat (1-2 Hz) with headroom
+  let hpfAlpha = Math.exp(-2 * Math.PI * HPF_FC / effectiveFs);
+  let lpfAlpha = Math.exp(-2 * Math.PI * LPF_FC / effectiveFs);
+
+  function recomputeFilterCoeffs() {
+    hpfAlpha = Math.exp(-2 * Math.PI * HPF_FC / effectiveFs);
+    lpfAlpha = Math.exp(-2 * Math.PI * LPF_FC / effectiveFs);
+  }
+
+  // ── Canvas sizing ──
+  function resizeWaveCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = waveCanvas.clientWidth || 440;
+    const h = waveCanvas.clientHeight || 140;
+    waveCanvas.width = w * dpr;
+    waveCanvas.height = h * dpr;
+    waveCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resizeWaveCanvas();
+  window.addEventListener('resize', resizeWaveCanvas);
+
+  function drawWave() {
+    const w = waveCanvas.clientWidth || 440;
+    const h = waveCanvas.clientHeight || 140;
+    waveCtx.clearRect(0, 0, w, h);
+
+    // Midline
+    waveCtx.strokeStyle = 'rgba(0,200,160,0.08)';
+    waveCtx.lineWidth = 1;
+    waveCtx.beginPath();
+    waveCtx.moveTo(0, h/2); waveCtx.lineTo(w, h/2);
+    waveCtx.stroke();
+
+    // Find current max for auto-scale
+    let maxAbs = 0.001;
+    for (let i = 0; i < WAVE_LEN; i++) {
+      const a = Math.abs(waveHistory[i]);
+      if (a > maxAbs) maxAbs = a;
+    }
+    const scale = (h * 0.42) / maxAbs;
+
+    // Trace
+    waveCtx.strokeStyle = 'rgba(0,229,184,0.9)';
+    waveCtx.lineWidth = 1.4;
+    waveCtx.beginPath();
+    for (let i = 0; i < WAVE_LEN; i++) {
+      const idx = (wavePos + i) % WAVE_LEN;
+      const x = (i / (WAVE_LEN - 1)) * w;
+      const y = h/2 - waveHistory[idx] * scale;
+      if (i === 0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
+    }
+    waveCtx.stroke();
+
+    // Peak markers
+    const windowMs = (WAVE_LEN / effectiveFs) * 1000;
+    const nowStreamMs = lastSampleMs || 0;
+    const startMs = nowStreamMs - windowMs;
+    waveCtx.fillStyle = 'rgba(255,184,74,0.9)';
+    for (const p of peaks) {
+      if (p < startMs) continue;
+      const x = ((p - startMs) / windowMs) * w;
+      waveCtx.beginPath();
+      waveCtx.arc(x, h/2, 2.5, 0, Math.PI*2);
+      waveCtx.fill();
+    }
+  }
+
+  // ── Peak detection (refractory + adaptive threshold) ──
+  function processSample(raw_mm, tStreamMs) {
+    // Sample-rate tracking
+    if (lastSampleMs !== null) {
+      const dt = tStreamMs - lastSampleMs;
+      if (dt > 0 && dt < 500) {
+        dtWindow.push(dt);
+        if (dtWindow.length > 100) dtWindow.shift();
+        if (dtWindow.length >= 10) {
+          const mean = dtWindow.reduce((a,b)=>a+b, 0) / dtWindow.length;
+          effectiveFs = 1000 / mean;
+          recomputeFilterCoeffs();
+        }
+      }
+    }
+    lastSampleMs = tStreamMs;
+
+    // Skip first sample
+    if (rawPrev === null) { rawPrev = raw_mm; return; }
+
+    // HPF: removes breathing + DC drift
+    hpfY = hpfAlpha * (hpfY + raw_mm - rawPrev);
+    rawPrev = raw_mm;
+
+    // LPF: smooths HC-SR04 quantization noise
+    lpfY = lpfAlpha * lpfY + (1 - lpfAlpha) * hpfY;
+
+    const filtered = lpfY;
+
+    // Waveform buffer
+    waveHistory[wavePos] = filtered;
+    wavePos = (wavePos + 1) % WAVE_LEN;
+
+    // Adaptive threshold = k × running RMS
+    rmsWin.push(filtered * filtered);
+    if (rmsWin.length > RMS_LEN) rmsWin.shift();
+    if (rmsWin.length >= 20) {
+      const meanSq = rmsWin.reduce((a,b)=>a+b, 0) / rmsWin.length;
+      const rms = Math.sqrt(meanSq);
+      adaptiveThresh = Math.max(0.05, rms * 1.5);  // mm
+    }
+
+    // Peak: positive-going crossing above threshold, with 350ms refractory
+    // (350 ms ≈ max 170 bpm ceiling — matches AcouScan's approach)
+    const REFRACTORY_MS = 350;
+    if (filtered > adaptiveThresh && (tStreamMs - lastPeakMs) > REFRACTORY_MS) {
+      // Confirm it's a local max by checking we're past the rising edge
+      const prevIdx = (wavePos - 2 + WAVE_LEN) % WAVE_LEN;
+      const currIdx = (wavePos - 1 + WAVE_LEN) % WAVE_LEN;
+      if (waveHistory[prevIdx] < waveHistory[currIdx] || true) {  // permissive
+        peaks.push(tStreamMs);
+        lastPeakMs = tStreamMs;
+        // Keep only last 20 peaks
+        if (peaks.length > 20) peaks.shift();
+      }
+    }
+
+    updateMetrics();
+  }
+
+  function updateMetrics() {
+    // Sample rate
+    valRateEl.textContent = effectiveFs.toFixed(0);
+    valRateEl.classList.remove('dim');
+
+    // Peak count
+    valPeaksEl.textContent = peaks.length.toString();
+    if (peaks.length > 0) { valPeaksEl.classList.remove('dim'); cardPeaks.classList.add('active'); }
+
+    // HR from last ~8 peaks
+    if (peaks.length >= 4) {
+      const recent = peaks.slice(-8);
+      const rrs = [];
+      for (let i = 1; i < recent.length; i++) rrs.push(recent[i] - recent[i-1]);
+      // Median RR for robustness
+      rrs.sort((a,b)=>a-b);
+      const medRR = rrs[Math.floor(rrs.length/2)];
+      if (medRR > 300 && medRR < 1800) {
+        const hr = Math.round(60000 / medRR);
+        valHrEl.textContent = hr.toString();
+        valHrEl.classList.remove('dim');
+        cardHr.classList.add('active');
+      }
+    }
+  }
+
+  // ── Serial connection lifecycle ──
+  async function connect() {
+    try {
+      port = await navigator.serial.requestPort({});
+    } catch (e) {
+      // User cancelled picker
+      return;
+    }
+
+    try {
+      await port.open({ baudRate: 115200 });
+    } catch (e) {
+      alert('Could not open serial port: ' + e.message + '\n\nIs the Arduino IDE Serial Monitor closed? Only one app can hold the port.');
+      port = null;
+      return;
+    }
+
+    btnConnect.textContent = 'Disconnect';
+    statusEl.textContent = 'Connected';
+    statusEl.style.color = 'var(--accent)';
+    dotEl.classList.add('recording');
+    textEl.textContent = 'Streaming';
+
+    // Reset state
+    peaks.length = 0;
+    rawPrev = null; hpfY = 0; lpfY = 0;
+    waveHistory.fill(0); wavePos = 0;
+    dtWindow.length = 0; rmsWin.length = 0;
+    lastSampleMs = null; lastPeakMs = 0;
+    valHrEl.textContent = '--'; valHrEl.classList.add('dim'); cardHr.classList.remove('active');
+    valPeaksEl.textContent = '--'; valPeaksEl.classList.add('dim'); cardPeaks.classList.remove('active');
+    valRateEl.textContent = '--'; valRateEl.classList.add('dim');
+
+    readLoopAlive = true;
+    readLoop();      // async, fire and forget
+    drawLoop();
+  }
+
+  async function disconnect() {
+    readLoopAlive = false;
+    try {
+      if (reader) { await reader.cancel(); reader.releaseLock(); reader = null; }
+      if (port) { await port.close(); port = null; }
+    } catch (e) { console.warn('Disconnect error:', e); }
+    btnConnect.textContent = 'Connect Arduino (Web Serial)';
+    statusEl.textContent = 'Disconnected';
+    statusEl.style.color = 'var(--textdim)';
+    dotEl.classList.remove('recording');
+    textEl.textContent = 'Idle';
+  }
+
+  async function readLoop() {
+    const decoder = new TextDecoderStream();
+    const readableClosed = port.readable.pipeTo(decoder.writable).catch(()=>{});
+    reader = decoder.readable.getReader();
+
+    try {
+      while (readLoopAlive) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        lineBuf += value;
+        let nlIdx;
+        while ((nlIdx = lineBuf.indexOf('\n')) !== -1) {
+          const line = lineBuf.slice(0, nlIdx).trim();
+          lineBuf = lineBuf.slice(nlIdx + 1);
+          if (!line) continue;
+          // Expected format: "distance_mm,timestamp_ms"
+          const parts = line.split(',');
+          if (parts.length !== 2) continue;
+          const dist = parseFloat(parts[0]);
+          const t = parseFloat(parts[1]);
+          if (isFinite(dist) && isFinite(t) && dist > 10 && dist < 1000) {
+            processSample(dist, t);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Read loop error:', e);
+    } finally {
+      try { reader.releaseLock(); } catch {}
+    }
+  }
+
+  function drawLoop() {
+    if (!readLoopAlive) return;
+    drawWave();
+    requestAnimationFrame(drawLoop);
+  }
+
+  btnConnect.addEventListener('click', () => {
+    if (port) disconnect();
+    else connect();
+  });
+})();
+</script>
+</body>
+</html>

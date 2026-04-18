@@ -1,0 +1,17 @@
+﻿# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Node / Vercel (if you add them later)
+node_modules/
+.vercel/
+.env
+.env.local
+
+# Arduino build artifacts
+build/
+*.hex
