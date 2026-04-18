@@ -683,7 +683,10 @@
       </div>
     </div>
 
-    <button class="btn btn-secondary" id="btn-us-connect" style="width:100%;">Connect Arduino (Web Serial)</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-secondary" id="btn-us-connect" style="flex:1;">Connect Arduino (Web Serial)</button>
+      <button class="btn btn-secondary" id="btn-us-clear" title="Clear measurement" style="width:44px; padding:0;">↺</button>
+    </div>
 
     <!-- BCG waveform -->
     <div class="wave-wrap" style="margin-top:4px;">
@@ -698,7 +701,7 @@
     <!-- US metric row -->
     <div class="metrics" style="margin-top:4px;">
       <div class="metric" id="us-card-hr">
-        <span class="metric-label">US heart rate</span>
+        <span class="metric-label">Ultrasonic HR</span>
         <span class="metric-value dim" id="us-val-hr">--</span>
         <span class="metric-unit">bpm</span>
       </div>
@@ -1741,6 +1744,7 @@ if ('serviceWorker' in navigator) {
 
   // ── DOM ──
   const btnConnect = document.getElementById('btn-us-connect');
+  const btnClear   = document.getElementById('btn-us-clear');
   const statusEl   = document.getElementById('us-status');
   const dotEl      = document.getElementById('us-dot');
   const textEl     = document.getElementById('us-text');
@@ -1947,6 +1951,20 @@ if ('serviceWorker' in navigator) {
     }
   }
 
+  // ── Reset measurement state (does not touch the serial port) ──
+  function resetMeasurement() {
+    peaks.length = 0;
+    rawPrev = null; hpfY = 0; lpfY = 0;
+    waveHistory.fill(0); wavePos = 0;
+    dtWindow.length = 0; rmsWin.length = 0;
+    lastSampleMs = null; lastPeakMs = 0;
+    valHrEl.textContent = '--'; valHrEl.classList.add('dim'); cardHr.classList.remove('active');
+    valPeaksEl.textContent = '--'; valPeaksEl.classList.add('dim'); cardPeaks.classList.remove('active');
+    valRateEl.textContent = '--'; valRateEl.classList.add('dim');
+  }
+
+  btnClear.addEventListener('click', resetMeasurement);
+
   // ── Serial connection lifecycle ──
   async function connect() {
     try {
@@ -1970,15 +1988,7 @@ if ('serviceWorker' in navigator) {
     dotEl.classList.add('recording');
     textEl.textContent = 'Streaming';
 
-    // Reset state
-    peaks.length = 0;
-    rawPrev = null; hpfY = 0; lpfY = 0;
-    waveHistory.fill(0); wavePos = 0;
-    dtWindow.length = 0; rmsWin.length = 0;
-    lastSampleMs = null; lastPeakMs = 0;
-    valHrEl.textContent = '--'; valHrEl.classList.add('dim'); cardHr.classList.remove('active');
-    valPeaksEl.textContent = '--'; valPeaksEl.classList.add('dim'); cardPeaks.classList.remove('active');
-    valRateEl.textContent = '--'; valRateEl.classList.add('dim');
+    resetMeasurement();
 
     readLoopAlive = true;
     readLoop();      // async, fire and forget
