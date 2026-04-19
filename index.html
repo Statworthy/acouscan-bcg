@@ -1785,7 +1785,8 @@ if ('serviceWorker' in navigator) {
   let effectiveFs = 50;   // Hz — estimated from actual stream
 
   // Peak detection
-  const peaks = [];       // timestamps in ms (stream time)
+  const peaks = [];       // timestamps in ms (stream time) — rolling window for HR
+  let totalPeaks = 0;     // cumulative beat count for UI display
   let lastPeakMs = 0;
   let adaptiveThresh = 0.02;  // in mm, auto-scales
   const rmsWin = [];
@@ -1916,8 +1917,9 @@ if ('serviceWorker' in navigator) {
       const currIdx = (wavePos - 1 + WAVE_LEN) % WAVE_LEN;
       if (waveHistory[prevIdx] < waveHistory[currIdx] || true) {  // permissive
         peaks.push(tStreamMs);
+        totalPeaks++;
         lastPeakMs = tStreamMs;
-        // Keep only last 20 peaks
+        // Keep only last 20 peaks in the rolling window used for HR
         if (peaks.length > 20) peaks.shift();
       }
     }
@@ -1930,9 +1932,9 @@ if ('serviceWorker' in navigator) {
     valRateEl.textContent = effectiveFs.toFixed(0);
     valRateEl.classList.remove('dim');
 
-    // Peak count
-    valPeaksEl.textContent = peaks.length.toString();
-    if (peaks.length > 0) { valPeaksEl.classList.remove('dim'); cardPeaks.classList.add('active'); }
+    // Peak count (cumulative, not the rolling window)
+    valPeaksEl.textContent = totalPeaks.toString();
+    if (totalPeaks > 0) { valPeaksEl.classList.remove('dim'); cardPeaks.classList.add('active'); }
 
     // HR from last ~8 peaks
     if (peaks.length >= 4) {
@@ -1954,6 +1956,7 @@ if ('serviceWorker' in navigator) {
   // ── Reset measurement state (does not touch the serial port) ──
   function resetMeasurement() {
     peaks.length = 0;
+    totalPeaks = 0;
     rawPrev = null; hpfY = 0; lpfY = 0;
     waveHistory.fill(0); wavePos = 0;
     dtWindow.length = 0; rmsWin.length = 0;
